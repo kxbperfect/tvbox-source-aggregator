@@ -57,7 +57,7 @@ ${sharedStyles}
   background:var(--bg);
   border:1px solid var(--border);
   border-radius:4px;
-  color:#fff;
+  color:var(--text-bright);
   outline:none;
   transition:border-color 0.2s;
 }
@@ -73,7 +73,7 @@ ${sharedStyles}
   background:var(--bg);
   border:1px solid var(--border);
   border-radius:4px;
-  color:#fff;
+  color:var(--text-bright);
   resize:vertical;
   outline:none;
 }
@@ -90,7 +90,7 @@ ${sharedStyles}
   background:var(--bg);
   border:1px solid var(--border);
   border-radius:4px;
-  color:#fff;
+  color:var(--text-bright);
   resize:vertical;
   margin-bottom:8px;
 }
@@ -106,7 +106,7 @@ ${sharedStyles}
   background:var(--bg);
   border:1px solid var(--border);
   border-radius:4px;
-  color:#fff;
+  color:var(--text-bright);
   resize:vertical;
 }
 
@@ -116,6 +116,7 @@ ${sharedStyles}
   .tab{padding:12px 14px;font-size:0.65rem}
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
 </head>
 <body style="opacity:0">
 
@@ -135,7 +136,10 @@ ${sharedStyles}
   <header class="header">
     <div class="header-top">
       <div class="header-label" data-i18n="headerLabel">Admin Console</div>
-      <button class="lang-toggle" id="langToggle" onclick="doToggleLang()">中文</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">☀️</button>
+        <button class="lang-toggle" id="langToggle" onclick="doToggleLang()">中文</button>
+      </div>
     </div>
     <h1 class="header-title">Source <span>Manager</span></h1>
     <nav class="header-nav">
@@ -878,6 +882,7 @@ async function triggerRefresh() {
   }, 3000);
 }
 
+applyTheme(getTheme());
 applyLang(translations, getLang());
 </script>
 </body>

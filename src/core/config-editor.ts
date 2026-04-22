@@ -38,7 +38,7 @@ ${sharedStyles}
   font-family:var(--mono);
   font-size:0.8rem;
   font-weight:600;
-  color:#fff;
+  color:var(--text-bright);
   display:flex;
   align-items:center;
   gap:8px;
@@ -91,7 +91,7 @@ ${sharedStyles}
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  color:#fff;
+  color:var(--text-bright);
   font-weight:500;
 }
 
@@ -213,6 +213,7 @@ ${sharedStyles}
 
 .footer{margin-top:48px;padding-top:24px}
 </style>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
 </head>
 <body style="opacity:0">
 
@@ -232,7 +233,10 @@ ${sharedStyles}
   <header class="header">
     <div class="header-top">
       <div class="header-label" data-i18n="headerLabel">Config Editor</div>
-      <button class="lang-toggle" id="langToggle" onclick="doToggleLang()">EN</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">☀️</button>
+        <button class="lang-toggle" id="langToggle" onclick="doToggleLang()">EN</button>
+      </div>
     </div>
     <h1 class="header-title">TVBox <span>Config</span></h1>
     <div class="header-nav">
@@ -592,6 +596,7 @@ async function unblock(type, id) {
   } catch (e) { alert('Network error'); }
 }
 
+applyTheme(getTheme());
 applyLang(_translations, getLang());
 </script>
 </body>

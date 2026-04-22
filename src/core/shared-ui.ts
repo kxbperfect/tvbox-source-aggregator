@@ -107,4 +107,20 @@ function toggleCollapsible(toggleEl) {
   const body = toggleEl.nextElementSibling;
   if (body) body.classList.toggle('open');
 }
+
+function getTheme() {
+  return localStorage.getItem('theme') || 'dark';
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  var btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+  var next = getTheme() === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+}
 `;
