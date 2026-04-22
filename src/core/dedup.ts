@@ -4,15 +4,12 @@ import type { TVBoxSite, TVBoxParse, TVBoxLive, TVBoxDoh, TVBoxRule } from './ty
 
 /**
  * 站点去重
- * 去重键: key + api（对 type 0/1）或 key + jar（对 type 3）
+ * 去重键: key + api（所有类型统一，JAR 差异不作为区分维度）
  * 冲突: key 相同但 api 不同 → key 加来源后缀
  */
 export function deduplicateSites(sites: TVBoxSite[]): TVBoxSite[] {
   const keyMap = new Map<string, TVBoxSite>(); // key → first site
   const dedupKey = (site: TVBoxSite): string => {
-    if (site.type === 3) {
-      return `${site.key}|${site.api}|${site.jar || ''}`;
-    }
     return `${site.key}|${site.api}`;
   };
 
