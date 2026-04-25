@@ -131,57 +131,7 @@ ${sharedStyles}
 .update-time.stale{color:var(--amber)}
 .update-time.never{color:var(--red)}
 
-/* Refresh button */
-.refresh-btn{
-  font-family:var(--mono);
-  font-size:0.75rem;
-  font-weight:600;
-  letter-spacing:0.1em;
-  text-transform:uppercase;
-  padding:10px 24px;
-  background:transparent;
-  border:1px solid var(--green);
-  color:var(--green);
-  border-radius:4px;
-  cursor:pointer;
-  position:relative;
-  overflow:hidden;
-  transition:all 0.3s;
-  white-space:nowrap;
-}
-
-.refresh-btn:hover{
-  background:var(--green-dim);
-  box-shadow:0 0 20px var(--green-dim);
-}
-
-.refresh-btn:active{transform:scale(0.97)}
-
-.refresh-btn.loading{
-  color:var(--amber);
-  border-color:var(--amber);
-  pointer-events:none;
-}
-
-.refresh-btn.loading::after{
-  content:'';
-  position:absolute;
-  bottom:0;left:0;
-  height:2px;
-  background:var(--amber);
-  animation:loading 2s linear infinite;
-}
-
-.refresh-btn.success{
-  color:var(--green);
-  border-color:var(--green);
-  background:var(--green-dim);
-}
-
-.refresh-btn.error{
-  color:var(--red);
-  border-color:var(--red);
-  background:var(--red-dim);
+/* Refresh button - removed */
 }
 
 /* Source Health Section */
@@ -417,9 +367,6 @@ ${sharedStyles}
       <div class="update-label" data-i18n="lastAggregation">Last Aggregation</div>
       <div class="update-time" id="updateTime"><span class="skeleton">&nbsp;Loading...&nbsp;</span></div>
     </div>
-    <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()" data-i18n="refresh">
-      Refresh
-    </button>
   </div>
 
   <div class="health-section">
@@ -479,10 +426,9 @@ ${sharedUi}
 const translations = {
   en: {
     headerLabel:'System Monitor', connecting:'Connecting...', sites:'Sites', lives:'Lives',
-    parses:'Parses', sources:'Sources', lastAggregation:'Last Aggregation', refresh:'Refresh',
-    refreshing:'Refreshing...', done:'Done', failed:'Failed', error:'Error',
+    parses:'Parses', sources:'Sources', lastAggregation:'Last Aggregation',
     configUrlLabel:'TVBox Config URL', liveConfigUrlLabel:'Live-Only Config URL',
-    copy:'Copy', copied:'Copied!', neverRefresh:'Never — trigger a refresh',
+    copy:'Copy', copied:'Copied!', copyFailed:'Failed', neverRefresh:'Never',
     fetchError:'Failed to fetch status', noData:'No data',
     sourceHealth:'Source Health', healthDetails:'Details', healthName:'Name',
     healthStatus:'Status', healthFails:'Fails', healthLastOk:'Last OK',
@@ -492,10 +438,9 @@ const translations = {
   },
   zh: {
     headerLabel:'系统监控', connecting:'连接中...', sites:'站点', lives:'直播',
-    parses:'解析', sources:'源', lastAggregation:'上次聚合', refresh:'刷新',
-    refreshing:'刷新中...', done:'完成', failed:'失败', error:'错误',
+    parses:'解析', sources:'源', lastAggregation:'上次聚合',
     configUrlLabel:'TVBox 配置地址', liveConfigUrlLabel:'直播配置地址',
-    copy:'复制', copied:'已复制!', neverRefresh:'从未更新 — 点击刷新',
+    copy:'复制', copied:'已复制!', copyFailed:'失败', neverRefresh:'从未更新',
     fetchError:'获取状态失败', noData:'无数据',
     sourceHealth:'源健康状态', healthDetails:'详情', healthName:'名称',
     healthStatus:'状态', healthFails:'失败', healthLastOk:'最后成功',
@@ -561,44 +506,38 @@ async function loadStatus() {
   }
 }
 
-async function triggerRefresh() {
-  const btn = $('refreshBtn');
-  btn.textContent = t('refreshing');
-  btn.className = 'refresh-btn loading';
-
-  try {
-    const res = await fetch('/refresh', { method: 'POST' });
-    const d = await res.json();
-    if (d.success) {
-      btn.textContent = t('done');
-      btn.className = 'refresh-btn success';
-      setTimeout(() => loadStatus(), 500);
-    } else {
-      btn.textContent = t('failed');
-      btn.className = 'refresh-btn error';
-    }
-  } catch {
-    btn.textContent = t('error');
-    btn.className = 'refresh-btn error';
-  }
-
-  setTimeout(() => {
-    btn.textContent = t('refresh');
-    btn.className = 'refresh-btn';
-  }, 3000);
-}
 
 function copyUrl(elementId) {
   const text = $(elementId).textContent;
   const btn = $(elementId).parentElement.querySelector('.copy-btn');
-  navigator.clipboard.writeText(text).then(() => {
+  function onOk() {
     btn.textContent = t('copied');
     btn.className = 'copy-btn copied';
-    setTimeout(() => {
-      btn.textContent = t('copy');
-      btn.className = 'copy-btn';
-    }, 2000);
-  });
+    setTimeout(() => { btn.textContent = t('copy'); btn.className = 'copy-btn'; }, 2000);
+  }
+  function onFail() {
+    btn.textContent = t('copyFailed');
+    btn.className = 'copy-btn error';
+    setTimeout(() => { btn.textContent = t('copy'); btn.className = 'copy-btn'; }, 2000);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(onOk).catch(() => {
+      fallbackCopy(text) ? onOk() : onFail();
+    });
+  } else {
+    fallbackCopy(text) ? onOk() : onFail();
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+  return ok;
 }
 
 const STATUS_LABELS = {

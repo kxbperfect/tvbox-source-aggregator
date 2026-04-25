@@ -13,7 +13,7 @@ import { loadBlacklist, applyBlacklist, pruneBlacklist, saveBlacklist } from './
 import { transformSiteNames } from './core/cleaner';
 import { parseConfigJson, type FetchProxyConfig } from './core/fetcher';
 import { buildJarRegistry, assignJars, buildJarStorageAdapter } from './core/jar-registry';
-import { scrapeSourceList } from './core/source-scraper';
+import { scrapeSourceList, scrapeMacCMSSources } from './core/source-scraper';
 import type { NameTransformConfig, JarAssignment, EdgeProxyConfig } from './core/types';
 
 export async function runAggregation(storage: Storage, config: AppConfig): Promise<void> {
@@ -64,6 +64,19 @@ async function _runAggregation(storage: Storage, config: AppConfig, startTime: n
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[aggregation] Auto-scrape failed (non-blocking): ${msg}`);
+  }
+
+  // Step 0.5: 自动抓取 MacCMS 资源站（直接从 mycj.pro API）
+  try {
+    console.log('[aggregation] Step 0.5: Auto-scraping MacCMS sources from mycj.pro...');
+    const scraped = await scrapeMacCMSSources();
+    if (scraped.length > 0) {
+      await storage.put(KV_MACCMS_SOURCES, JSON.stringify(scraped));
+      console.log(`[aggregation] MacCMS auto-scraped: ${scraped.length} sources updated`);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[aggregation] MacCMS auto-scrape failed (non-blocking): ${msg}`);
   }
 
   // Step 1: 读取手动配置的源（含自动抓取合并后的）
@@ -261,12 +274,13 @@ async function _runAggregation(storage: Storage, config: AppConfig, startTime: n
     console.log('[aggregation] Step 6: No sites to test');
   }
 
-  // Step 7: CF 模式 JAR URL 改写
-  if (config.workerBaseUrl) {
-    console.log('[aggregation] Step 7: Rewriting JAR URLs for CF proxy...');
-    merged = await rewriteJarUrls(merged, config.workerBaseUrl, storage);
+  // Step 7: JAR URL 改写（CF 用 workerBaseUrl，本地用 localBaseUrl）
+  const jarBaseUrl = config.workerBaseUrl || config.localBaseUrl;
+  if (jarBaseUrl) {
+    console.log(`[aggregation] Step 7: Rewriting JAR URLs for proxy (${jarBaseUrl})...`);
+    merged = await rewriteJarUrls(merged, jarBaseUrl, storage);
   } else {
-    console.log('[aggregation] Step 7: Skipping JAR rewrite (local mode)');
+    console.log('[aggregation] Step 7: Skipping JAR rewrite (no base URL)');
   }
 
   // Step 7.5: 注入图片代理前缀（CF 模式用自身，本地模式用边缘代理）

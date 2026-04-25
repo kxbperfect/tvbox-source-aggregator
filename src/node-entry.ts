@@ -46,7 +46,9 @@ function createStorage(): Storage {
 
 // ─── 配置 ────────────────────────────────────────────────
 
-function buildConfig(): AppConfig {
+function buildConfig(port: number): AppConfig {
+  const lanIp = getLocalIp();
+  const baseUrl = process.env.BASE_URL || `http://${lanIp || 'localhost'}:${port}`;
   return {
     adminToken: process.env.ADMIN_TOKEN,
     refreshToken: process.env.REFRESH_TOKEN,
@@ -54,6 +56,7 @@ function buildConfig(): AppConfig {
     siteTimeoutMs: parseInt(process.env.SITE_TIMEOUT_MS || '') || DEFAULT_SITE_TIMEOUT_MS,
     fetchTimeoutMs: parseInt(process.env.FETCH_TIMEOUT_MS || '') || DEFAULT_FETCH_TIMEOUT_MS,
     cronSchedule: process.env.CRON_SCHEDULE || '0 5 * * *',
+    localBaseUrl: baseUrl.replace(/\/$/, ''),
   };
 }
 
@@ -80,11 +83,11 @@ function intervalLabel(minutes: number): string {
 
 async function main() {
   const storage = createStorage();
-  const config = buildConfig();
   const port = parseInt(process.env.PORT || '') || 5678;
+  const config = buildConfig(port);
 
   let refreshRunning = false;
-  const AGGREGATION_TIMEOUT_MS = 120_000; // 聚合整体超时 2 分钟
+  const AGGREGATION_TIMEOUT_MS = 300_000; // 聚合整体超时 5 分钟
 
   const runWithGuard = async () => {
     if (refreshRunning) {

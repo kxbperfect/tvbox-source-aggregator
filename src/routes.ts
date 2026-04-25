@@ -591,8 +591,9 @@ export function createApp(deps: AppDeps): Hono {
     });
   }
 
-  // ─── JAR 代理（仅 CF 版）─────────────────────────────
+  // ─── JAR 代理 ─────────────────────────────────────────
   if (config.workerBaseUrl) {
+    // CF 版：用 CF Cache + KV 二进制缓存
     app.get('/jar/:key', async (c) => {
       const key = c.req.param('key');
 
@@ -650,6 +651,81 @@ export function createApp(deps: AppDeps): Hono {
       }
 
       return c.json({ error: 'JAR unavailable from origin and no binary cache' }, 502);
+    });
+  } else if (config.localBaseUrl) {
+    // Node.js 版：用文件系统缓存
+    const fs = require('fs');
+    const pathMod = require('path');
+    const jarCacheDir = pathMod.resolve(process.env.DATA_DIR || pathMod.join(process.cwd(), 'data'), 'jars');
+    if (!fs.existsSync(jarCacheDir)) fs.mkdirSync(jarCacheDir, { recursive: true });
+
+    // 并发下载锁：防止同一 JAR 被多个请求同时下载
+    const downloadLocks = new Map<string, Promise<Buffer | null>>();
+
+    async function fetchAndCacheJar(key: string, originalUrl: string): Promise<Buffer | null> {
+      try {
+        const resp = await fetch(originalUrl, {
+          headers: { 'User-Agent': 'okhttp/3.12.0' },
+        });
+        if (!resp.ok) {
+          console.log(`[jar-proxy] Origin returned ${resp.status} for ${key}`);
+          return null;
+        }
+        const buf = Buffer.from(await resp.arrayBuffer());
+        fs.writeFileSync(pathMod.join(jarCacheDir, `${key}.jar`), buf);
+        console.log(`[jar-proxy] Cached ${key}.jar (${(buf.length / 1024).toFixed(1)} KB)`);
+        return buf;
+      } catch (error: unknown) {
+        console.log(`[jar-proxy] Fetch error for ${key}: ${error instanceof Error ? error.message : error}`);
+        return null;
+      }
+    }
+
+    app.get('/jar/:key', async (c) => {
+      const key = c.req.param('key');
+
+      // 1. 查 storage 拿原始 URL
+      const originalUrl = await lookupJarUrl(key, storage);
+      if (!originalUrl) {
+        return c.json({ error: 'Unknown JAR key' }, 404);
+      }
+
+      // 2. 查文件缓存
+      const cachePath = pathMod.join(jarCacheDir, `${key}.jar`);
+      if (fs.existsSync(cachePath)) {
+        const stat = fs.statSync(cachePath);
+        const ttl = isMd5Key(key) ? 86400_000 : 21600_000;
+        if (Date.now() - stat.mtimeMs < ttl) {
+          const buf = fs.readFileSync(cachePath);
+          return new Response(buf, {
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'Cache-Control': `public, max-age=${ttl / 1000}`,
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        }
+      }
+
+      // 3. 下载（带并发锁）
+      let downloading = downloadLocks.get(key);
+      if (!downloading) {
+        downloading = fetchAndCacheJar(key, originalUrl).finally(() => downloadLocks.delete(key));
+        downloadLocks.set(key, downloading);
+      }
+
+      const buf = await downloading;
+      if (buf) {
+        return new Response(buf, {
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Cache-Control': `public, max-age=${isMd5Key(key) ? 86400 : 21600}`,
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+
+      return c.json({ error: 'JAR unavailable from origin' }, 502);
     });
   }
 
