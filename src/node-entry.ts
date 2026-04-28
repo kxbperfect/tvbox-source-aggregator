@@ -5,6 +5,8 @@ import * as cron from 'node-cron';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
+import * as dns from 'dns';
 import { createApp } from './routes';
 import { runAggregation } from './aggregator';
 import {
@@ -46,8 +48,21 @@ function createStorage(): Storage {
 
 // ─── 配置 ────────────────────────────────────────────────
 
-function buildConfig(port: number): AppConfig {
-  const lanIp = getLocalIp();
+async function buildConfig(port: number): Promise<AppConfig> {
+  const docker = isDocker();
+  let lanIp = getLocalIp();
+  let dockerMissingBaseUrl = false;
+
+  if (docker && !process.env.BASE_URL) {
+    try {
+      const result = await dns.promises.lookup('host.docker.internal');
+      lanIp = result.address;
+    } catch {
+      // host.docker.internal 不可用（Linux Docker 非 Desktop），保留容器 IP 但标记警告
+      dockerMissingBaseUrl = true;
+    }
+  }
+
   const baseUrl = process.env.BASE_URL || `http://${lanIp || 'localhost'}:${port}`;
   return {
     adminToken: process.env.ADMIN_TOKEN,
@@ -57,6 +72,7 @@ function buildConfig(port: number): AppConfig {
     fetchTimeoutMs: parseInt(process.env.FETCH_TIMEOUT_MS || '') || DEFAULT_FETCH_TIMEOUT_MS,
     cronSchedule: process.env.CRON_SCHEDULE || '0 5 * * *',
     localBaseUrl: baseUrl.replace(/\/$/, ''),
+    dockerMissingBaseUrl,
     // 自动抓取（环境变量驱动）
     scrapeSourceUrl: process.env.SCRAPE_SOURCE_URL,
     scrapeSourceReferer: process.env.SCRAPE_SOURCE_REFERER,
@@ -90,7 +106,7 @@ function intervalLabel(minutes: number): string {
 async function main() {
   const storage = createStorage();
   const port = parseInt(process.env.PORT || '') || 5678;
-  const config = buildConfig(port);
+  const config = await buildConfig(port);
 
   let refreshRunning = false;
   const AGGREGATION_TIMEOUT_MS = 300_000; // 聚合整体超时 5 分钟
@@ -158,20 +174,30 @@ async function main() {
     },
   });
 
-  const lanIp = getLocalIp();
+  let displayHost = 'localhost';
+  try {
+    const u = new URL(config.localBaseUrl || '');
+    displayHost = u.hostname;
+  } catch { /* keep localhost */ }
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log('');
     console.log('  TVBox Source Aggregator');
     console.log(`  > Local:   http://localhost:${info.port}/`);
-    if (lanIp) {
-      console.log(`  > Network: http://${lanIp}:${info.port}/`);
+    if (displayHost !== 'localhost') {
+      console.log(`  > Network: http://${displayHost}:${info.port}/`);
     }
-    console.log(`  > Admin:   http://${lanIp || 'localhost'}:${info.port}/admin`);
-    console.log(`  > Status:  http://${lanIp || 'localhost'}:${info.port}/status`);
+    console.log(`  > Admin:   http://${displayHost}:${info.port}/admin`);
+    console.log(`  > Status:  http://${displayHost}:${info.port}/status`);
     console.log(`  > Cron:    ${currentSchedule} (every ${intervalLabel(intervalMin)})`);
+    if (config.dockerMissingBaseUrl) {
+      console.log('');
+      console.log('  ⚠️  检测到 Docker 环境但未配置 BASE_URL');
+      console.log(`     当前地址 ${displayHost} 为容器内部 IP，TVBox 客户端可能无法访问`);
+      console.log('     请在 .env 或 docker-compose.yml 中设置：BASE_URL=http://宿主机IP:端口');
+    }
     console.log('');
-    console.log(`  TVBox 填入地址: http://${lanIp || 'localhost'}:${info.port}/`);
+    console.log(`  TVBox 填入地址: http://${displayHost}:${info.port}/`);
     console.log('');
   });
 }
@@ -186,6 +212,20 @@ function getLocalIp(): string | null {
     }
   }
   return null;
+}
+
+function isDocker(): boolean {
+  try {
+    fs.accessSync('/.dockerenv');
+    return true;
+  } catch {
+    try {
+      const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
+      return /docker|containerd/.test(cgroup);
+    } catch {
+      return false;
+    }
+  }
 }
 
 main();

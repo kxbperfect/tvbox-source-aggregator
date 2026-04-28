@@ -96,6 +96,11 @@ export function createApp(deps: AppDeps): Hono {
       }
     }
 
+    const warnings: string[] = [];
+    if (config.dockerMissingBaseUrl) {
+      warnings.push('docker_no_base_url');
+    }
+
     return c.json({
       lastUpdate: lastUpdate || 'never',
       sourceCount: sources ? JSON.parse(sources).length : 0,
@@ -104,6 +109,7 @@ export function createApp(deps: AppDeps): Hono {
       sites: siteCount,
       parses: parseCount,
       lives: liveCount,
+      warnings,
     });
   });
 
@@ -1217,6 +1223,43 @@ export function createApp(deps: AppDeps): Hono {
     await saveBlacklist(storage, blacklist);
 
     return c.json({ success: true });
+  });
+
+  app.post('/admin/blacklist/batch', async (c) => {
+    if (!verifyAdmin(c.req.raw, config)) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    let body: { type?: string; ids?: string[] };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Invalid JSON' }, 400);
+    }
+
+    const { type, ids } = body;
+    if (!type || !Array.isArray(ids) || ids.length === 0) {
+      return c.json({ error: 'type and ids[] are required' }, 400);
+    }
+    if (ids.length > 500) {
+      return c.json({ error: 'Too many ids (max 500)' }, 400);
+    }
+    if (!['sites', 'parses', 'lives'].includes(type)) {
+      return c.json({ error: 'type must be sites, parses, or lives' }, 400);
+    }
+
+    const blacklist = await loadBlacklist(storage);
+    const list = blacklist[type as keyof typeof blacklist] as string[];
+    let added = 0;
+    for (const id of ids) {
+      if (typeof id === 'string' && !list.includes(id)) {
+        list.push(id);
+        added++;
+      }
+    }
+    await saveBlacklist(storage, blacklist);
+
+    return c.json({ success: true, added });
   });
 
   app.delete('/admin/blacklist', async (c) => {

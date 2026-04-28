@@ -8,7 +8,7 @@ services:
     environment:
       - ADMIN_TOKEN=${ADMIN_TOKEN:-changeme}
       - REFRESH_TOKEN=${REFRESH_TOKEN:-}
-      - BASE_URL=${BASE_URL:-}
+      - BASE_URL=${BASE_URL:-}  # Docker 部署必填，如 http://192.168.1.100:5678
       - SCRAPE_SOURCE_URL=${SCRAPE_SOURCE_URL:-}
       - SCRAPE_SOURCE_REFERER=${SCRAPE_SOURCE_REFERER:-}
       - MACCMS_API_URL=${MACCMS_API_URL:-}

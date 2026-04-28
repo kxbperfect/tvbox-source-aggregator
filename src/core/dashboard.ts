@@ -303,6 +303,18 @@ ${sharedStyles}
   border-color:var(--green);
 }
 
+.warning-banner{
+  background:var(--amber-dim);
+  border:1px solid var(--amber);
+  border-radius:8px;
+  padding:12px 16px;
+  margin-bottom:20px;
+  font-family:var(--mono);
+  font-size:0.75rem;
+  color:var(--amber);
+  line-height:1.6;
+}
+
 .footer{margin-top:48px;padding-top:24px}
 </style>
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
@@ -330,6 +342,8 @@ ${sharedStyles}
       <a href="/admin/config-editor" data-i18n="navConfigEditor">Config Editor</a>
     </nav>
   </header>
+
+  <div id="warningBanner"></div>
 
   <div class="stats-grid">
     <div class="stat-card highlight">
@@ -464,6 +478,7 @@ const translations = {
     searchQuota:'Search Quota', sqActive:'active', sqExcluded:'excluded',
     sqName:'Name', sqSource:'Source', sqReason:'Reason',
     sqPinned:'pinned', sqHttp:'http', sqMainJar:'main jar', sqIndepJar:'indep jar',
+    warnDockerNoBaseUrl:'Docker environment detected without BASE_URL configured. JAR proxy addresses may be unreachable from TVBox clients.<br>Set <b>BASE_URL=http://HOST_IP:PORT</b> in docker-compose.yml',
     footer:'TVBox Source Aggregator &middot; Cron 05:00 UTC Daily',
     navAdmin:'Admin', navConfigEditor:'Config Editor',
   },
@@ -479,6 +494,7 @@ const translations = {
     searchQuota:'搜索配额', sqActive:'活跃', sqExcluded:'排除',
     sqName:'名称', sqSource:'来源', sqReason:'原因',
     sqPinned:'置顶', sqHttp:'HTTP', sqMainJar:'主 JAR', sqIndepJar:'独立 JAR',
+    warnDockerNoBaseUrl:'检测到 Docker 环境但未配置 BASE_URL，JAR 代理地址可能不可达。<br>请在 docker-compose.yml 中设置 <b>BASE_URL=http://宿主机IP:端口</b>',
     footer:'TVBox 源聚合器 &middot; 每日 UTC 05:00 定时任务',
     navAdmin:'管理', navConfigEditor:'配置编辑',
   }
@@ -531,6 +547,16 @@ async function loadStatus() {
       time.className = 'update-time never';
       dot.className = 'status-dot offline';
       txt.textContent = t('noData');
+    }
+
+    // Render warnings
+    const banner = $('warningBanner');
+    const warnings = d.warnings || [];
+    if (warnings.length > 0) {
+      const WARN_KEYS = { docker_no_base_url: 'warnDockerNoBaseUrl' };
+      banner.innerHTML = warnings.map(w => '<div class="warning-banner">⚠ ' + (t(WARN_KEYS[w] || w)) + '</div>').join('');
+    } else {
+      banner.innerHTML = '';
     }
   } catch (e) {
     $('statusDot').className = 'status-dot offline';
